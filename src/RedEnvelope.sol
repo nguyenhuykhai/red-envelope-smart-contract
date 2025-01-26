@@ -5,6 +5,12 @@ import {ConstantGlobal} from "./lib/constant.sol";
 import {RandomHelper} from "./helpers/utils.sol";
 
 contract RedEnvelope is ConstantGlobal, RandomHelper {
+    struct Packet {
+        uint256 amount;
+        string status;
+        address receiver;
+    }
+
     struct Envelope {
         address creator;
         uint256 totalFund;
@@ -13,101 +19,167 @@ contract RedEnvelope is ConstantGlobal, RandomHelper {
         string envelopeType;
         string message;
         bool isActive;
-        uint256[] amounts;
+        uint256 createdAt;
+        uint256[] packetIds;
     }
 
     mapping(uint256 => Envelope) public envelopes;
-    uint256 public envelopeCounter;
+    mapping(uint256 => Packet) public packets;
 
-    event EnvelopeCreated(
-        uint256 indexed envelopeId,
-        address indexed creator,
-        uint256 totalAmount,
-        uint256 numberOfPackets
-    );
-    event EnvelopeOpened(
-        uint256 indexed envelopeId,
-        address indexed receiver,
-        uint256 amount
-    );
+    uint256 public nextEnvelopeId; // Biến đếm để tạo ID cho Envelope
+    uint256 public nextPacketId; // Biến đếm để tạo ID cho Packet
 
     function createEnvelope(
-        uint256 numberOfPackets,
-        string memory envelopeType,
-        string memory message
-    ) external payable {
-        require(msg.value > 0, "Amount must be greater than 0");
+        uint256 _numberOfPackets,
+        string memory _envelopeType,
+        string memory _message
+    ) public payable {
         require(
-            numberOfPackets > 0,
+            _numberOfPackets > 0,
             "Number of packets must be greater than 0"
         );
+        require(msg.value > 0, "Amount must be greater than 0");
 
-        uint256 envelopeId = envelopeCounter++;
+        uint256 envelopeId = nextEnvelopeId++;
         envelopes[envelopeId] = Envelope({
             creator: msg.sender,
             totalFund: msg.value,
             remainingAmount: msg.value,
-            numberOfPackets: numberOfPackets,
-            envelopeType: envelopeType,
-            message: message,
+            numberOfPackets: _numberOfPackets,
+            envelopeType: _envelopeType,
+            message: _message,
             isActive: true,
-            amounts: new uint256[](numberOfPackets)
+            createdAt: block.timestamp,
+            packetIds: new uint256[](0)
         });
 
-        if (stringsEqual(envelopeType, ENVELOP_TYPE_EQUAL)) {
-            createEqualEnvelope(envelopeId, numberOfPackets);
-        } else {
-            createRandomEnvelope(envelopeId, numberOfPackets);
+        if (
+            keccak256(abi.encodePacked(_envelopeType)) ==
+            keccak256(abi.encodePacked("equal"))
+        ) {
+            uint256 amountPerPacket = msg.value / _numberOfPackets;
+            for (uint256 i = 0; i < _numberOfPackets; i++) {
+                uint256 packetId = nextPacketId++;
+                packets[packetId] = Packet({
+                    amount: amountPerPacket,
+                    status: "unclaimed",
+                    receiver: address(0)
+                });
+                envelopes[envelopeId].packetIds.push(packetId);
+            }
+        } else if (
+            keccak256(abi.encodePacked(_envelopeType)) ==
+            keccak256(abi.encodePacked("random"))
+        ) {
+            uint256 remainingAmount = msg.value;
+            for (uint256 i = 0; i < _numberOfPackets; i++) {
+                uint256 packetId = nextPacketId++;
+                uint256 amount = (i == _numberOfPackets - 1)
+                    ? remainingAmount
+                    : random(remainingAmount);
+                packets[packetId] = Packet({
+                    amount: amount,
+                    status: "unclaimed",
+                    receiver: address(0)
+                });
+                envelopes[envelopeId].packetIds.push(packetId);
+                remainingAmount -= amount;
+            }
         }
-
-        emit EnvelopeCreated(
-            envelopeId,
-            msg.sender,
-            msg.value,
-            numberOfPackets
-        );
     }
 
-    function openEnvelope(uint256 envelopeId) external {
+    function getPacketsByEnvelope(
+        uint256 envelopeId
+    ) public view returns (Packet[] memory) {
+        require(
+            envelopes[envelopeId].creator == msg.sender,
+            "Only creator can view packets"
+        );
+
+        uint256[] memory packetIds = envelopes[envelopeId].packetIds;
+        Packet[] memory result = new Packet[](packetIds.length);
+
+        for (uint256 i = 0; i < packetIds.length; i++) {
+            result[i] = packets[packetIds[i]];
+        }
+
+        return result;
+    }
+
+    function claimPacket(uint256 envelopeId, uint256 packetId) public {
         require(envelopes[envelopeId].isActive, "Envelope is not active");
-        require(envelopes[envelopeId].remainingAmount > 0, "Envelope is empty");
+        require(
+            packets[packetId].receiver == address(0),
+            "Packet already claimed"
+        );
+        require(
+            keccak256(abi.encodePacked(packets[packetId].status)) ==
+                keccak256(abi.encodePacked("unclaimed")),
+            "Packet already claimed"
+        );
+        require(
+            keccak256(abi.encodePacked(packets[packetId].status)) !=
+                keccak256(abi.encodePacked("cancel")),
+            "Packet is canceled"
+        );
 
-        uint256 amount = envelopes[envelopeId].amounts[
-            envelopes[envelopeId].amounts.length - 1
-        ];
-        envelopes[envelopeId].amounts.pop();
-        envelopes[envelopeId].remainingAmount -= amount;
-        envelopes[envelopeId].numberOfPackets--;
+        // Cập nhật thông tin Packet
+        packets[packetId].receiver = msg.sender;
+        packets[packetId].status = "claimed";
 
-        if (envelopes[envelopeId].numberOfPackets == 0) {
+        // Chuyển tiền đến người nhận
+        payable(msg.sender).transfer(packets[packetId].amount);
+
+        // Cập nhật remainingAmount của Envelope
+        envelopes[envelopeId].remainingAmount -= packets[packetId].amount;
+
+        // Nếu tất cả Packet đã được nhận, đánh dấu Envelope là không hoạt động
+        if (envelopes[envelopeId].remainingAmount == 0) {
             envelopes[envelopeId].isActive = false;
         }
-
-        payable(msg.sender).transfer(amount);
-        emit EnvelopeOpened(envelopeId, msg.sender, amount);
     }
 
-    function createEqualEnvelope(
-        uint256 envelopeId,
-        uint256 numberOfPackets
-    ) private {
-        uint256 amountPerPacket = envelopes[envelopeId].totalFund /
-            numberOfPackets;
-        for (uint256 i = 0; i < numberOfPackets; i++) {
-            envelopes[envelopeId].amounts[i] = amountPerPacket;
-        }
+    function getContractBalance() public view returns (uint256) {
+        return address(this).balance;
     }
 
-    function createRandomEnvelope(
-        uint256 envelopeId,
-        uint256 numberOfPackets
-    ) private {
-        uint256 remainingAmount = envelopes[envelopeId].totalFund;
-        for (uint256 i = 0; i < numberOfPackets - 1; i++) {
-            uint256 amount = random(remainingAmount);
-            envelopes[envelopeId].amounts[i] = amount;
-            remainingAmount -= amount;
+    function withdraw(uint256 envelopeId) public {
+        // Kiểm tra chỉ người tạo Envelope mới có thể gọi hàm này
+        require(
+            envelopes[envelopeId].creator == msg.sender,
+            "Only creator can withdraw"
+        );
+
+        // Kiểm tra Envelope phải còn hoạt động
+        require(envelopes[envelopeId].isActive, "Envelope is not active");
+
+        // Tính tổng số tiền từ các Packet chưa được nhận
+        uint256 totalUnclaimedAmount = 0;
+        uint256[] memory packetIds = envelopes[envelopeId].packetIds;
+
+        for (uint256 i = 0; i < packetIds.length; i++) {
+            if (
+                keccak256(abi.encodePacked(packets[packetIds[i]].status)) ==
+                keccak256(abi.encodePacked("unclaimed"))
+            ) {
+                totalUnclaimedAmount += packets[packetIds[i]].amount;
+                // Đánh dấu Packet là "cancel"
+                packets[packetIds[i]].status = "cancel";
+            }
         }
-        envelopes[envelopeId].amounts[numberOfPackets - 1] = remainingAmount;
+
+        // Kiểm tra có Packet nào chưa được nhận không
+        require(totalUnclaimedAmount > 0, "No unclaimed packets to withdraw");
+
+        // Chuyển tiền về ví của người tạo
+        payable(msg.sender).transfer(totalUnclaimedAmount);
+
+        // Cập nhật remainingAmount của Envelope
+        envelopes[envelopeId].remainingAmount -= totalUnclaimedAmount;
+
+        // Nếu không còn Packet nào hoạt động, đánh dấu Envelope là không hoạt động
+        if (envelopes[envelopeId].remainingAmount == 0) {
+            envelopes[envelopeId].isActive = false;
+        }
     }
 }
