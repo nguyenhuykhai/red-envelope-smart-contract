@@ -53,10 +53,7 @@ contract RedEnvelope is ConstantGlobal, RandomHelper {
             packetIds: new uint256[](0)
         });
 
-        if (
-            keccak256(abi.encodePacked(_envelopeType)) ==
-            keccak256(abi.encodePacked("equal"))
-        ) {
+        if (stringsEqual(_envelopeType, ENVELOP_TYPE_EQUAL)) {
             uint256 amountPerPacket = msg.value / _numberOfPackets;
             for (uint256 i = 0; i < _numberOfPackets; i++) {
                 uint256 packetId = nextPacketId++;
@@ -67,10 +64,7 @@ contract RedEnvelope is ConstantGlobal, RandomHelper {
                 });
                 envelopes[envelopeId].packetIds.push(packetId);
             }
-        } else if (
-            keccak256(abi.encodePacked(_envelopeType)) ==
-            keccak256(abi.encodePacked("random"))
-        ) {
+        } else if (stringsEqual(_envelopeType, ENVELOP_TYPE_RANDOM)) {
             uint256 remainingAmount = msg.value;
             for (uint256 i = 0; i < _numberOfPackets; i++) {
                 uint256 packetId = nextPacketId++;
@@ -113,13 +107,11 @@ contract RedEnvelope is ConstantGlobal, RandomHelper {
             "Packet already claimed"
         );
         require(
-            keccak256(abi.encodePacked(packets[packetId].status)) ==
-                keccak256(abi.encodePacked("unclaimed")),
+            stringsEqual(packets[packetId].status, PACKET_STATUS_UNCLAIMED),
             "Packet already claimed"
         );
         require(
-            keccak256(abi.encodePacked(packets[packetId].status)) !=
-                keccak256(abi.encodePacked("cancel")),
+            stringsNotEqual(packets[packetId].status, PACKET_STATUS_CANCEL),
             "Packet is canceled"
         );
 
@@ -159,8 +151,10 @@ contract RedEnvelope is ConstantGlobal, RandomHelper {
 
         for (uint256 i = 0; i < packetIds.length; i++) {
             if (
-                keccak256(abi.encodePacked(packets[packetIds[i]].status)) ==
-                keccak256(abi.encodePacked("unclaimed"))
+                stringsEqual(
+                    packets[packetIds[i]].status,
+                    PACKET_STATUS_UNCLAIMED
+                )
             ) {
                 totalUnclaimedAmount += packets[packetIds[i]].amount;
                 // Đánh dấu Packet là "cancel"
@@ -172,6 +166,7 @@ contract RedEnvelope is ConstantGlobal, RandomHelper {
         require(totalUnclaimedAmount > 0, "No unclaimed packets to withdraw");
 
         // Chuyển tiền về ví của người tạo
+
         payable(msg.sender).transfer(totalUnclaimedAmount);
 
         // Cập nhật remainingAmount của Envelope

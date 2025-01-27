@@ -8,7 +8,10 @@ contract RandomHelper {
      * @return uint256 A pseudo-random number.
      */
     function random(uint256 remainingAmount) internal view returns (uint256) {
-        require(remainingAmount > 0, "RandomHelper: remainingAmount must be greater than 0");
+        require(
+            remainingAmount > 0,
+            "RandomHelper: remainingAmount must be greater than 0"
+        );
 
         // Generate a pseudo-random number using block.timestamp, block.prevrandao, and remainingAmount
         uint256 randomNumber = uint256(
@@ -23,7 +26,8 @@ contract RandomHelper {
         );
 
         // Reduce bias by using a loop to discard values outside the desired range
-        uint256 threshold = type(uint256).max - (type(uint256).max % remainingAmount);
+        uint256 threshold = type(uint256).max -
+            (type(uint256).max % remainingAmount);
         while (randomNumber >= threshold) {
             randomNumber = uint256(
                 keccak256(
@@ -47,7 +51,10 @@ contract RandomHelper {
      * @return uint256 A pseudo-random number.
      */
     function getRandomNumber(uint256 maxAmount) public view returns (uint256) {
-        require(maxAmount > 0, "RandomHelper: maxAmount must be greater than 0");
+        require(
+            maxAmount > 0,
+            "RandomHelper: maxAmount must be greater than 0"
+        );
         return random(maxAmount);
     }
 
@@ -57,7 +64,23 @@ contract RandomHelper {
      * @param b The second string.
      * @return bool True if the strings are equal, false otherwise.
      */
-    function stringsEqual(string memory a, string memory b) internal pure returns (bool) {
+    function stringsEqual(
+        string memory a,
+        string memory b
+    ) internal pure returns (bool) {
         return keccak256(abi.encodePacked(a)) == keccak256(abi.encodePacked(b));
+    }
+
+    /**
+     * @dev Compares two strings.
+     * @param a The first string.
+     * @param b The second string.
+     * @return bool True if the strings aren't equal, false otherwise.
+     */
+    function stringsNotEqual(
+        string memory a,
+        string memory b
+    ) internal pure returns (bool) {
+        return keccak256(abi.encodePacked(a)) != keccak256(abi.encodePacked(b));
     }
 }
