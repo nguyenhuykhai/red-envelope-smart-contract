@@ -6,5 +6,5 @@ contract ConstantGlobal {
     string public constant ENVELOP_TYPE_RANDOM = "random";
     string public constant PACKET_STATUS_UNCLAIMED = "unclaimed";
     string public constant PACKET_STATUS_CLAIMED = "claimed";
-    string public constant PACKET_STATUS_CANCEL = "cancel";
+    string public constant PACKET_STATUS_CANCELLED = "cancel";
 }

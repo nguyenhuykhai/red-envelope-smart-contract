@@ -1,14 +1,17 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.13;
+
 import "forge-std/Script.sol";
 import {RedEnvelope} from "src/RedEnvelope.sol";
 
 contract Deploy is Script {
-    RedEnvelope public redEnvelope;
-
     function run() external {
         vm.startBroadcast();
-        redEnvelope = new RedEnvelope();
+
+        // Deploy với địa chỉ priceFeedAddress
+        RedEnvelope redEnvelope = new RedEnvelope();
+
         vm.stopBroadcast();
+        console.log("RedEnvelope deployed at:", address(redEnvelope));
     }
 }

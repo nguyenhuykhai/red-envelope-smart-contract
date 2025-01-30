@@ -2,51 +2,89 @@
 pragma solidity ^0.8.13;
 
 import "forge-std/Script.sol";
-import "src/RedEnvelope.sol";
+import "../src/RedEnvelope.sol";
+import "../src/helpers/NetworkConfig.sol";
+import {ConstantGlobal} from "../src/lib/constant.sol";
 
-contract RedEnvelopeScript is Script {
-    // Địa chỉ của hợp đồng RedEnvelope (sẽ được deploy hoặc truyền vào)
-    address public redEnvelopeAddress;
-
-    // Hàm chạy script
+contract ClaimPacketScript is Script, ConstantGlobal {
     function run() external {
-        // Lấy private key từ biến môi trường
+        // Load private keys for deployer and user
         uint256 deployerPrivateKey = vm.envUint("ANVIL_PRIVATE_KEY");
+        uint256 userPrivateKey = vm.envUint("ANVIL_PRIVATE_KEY_2");
 
-        // Deploy hợp đồng RedEnvelope (nếu chưa có địa chỉ)
-        if (redEnvelopeAddress == address(0)) {
-            vm.startBroadcast(deployerPrivateKey);
-            RedEnvelope newRedEnvelope = new RedEnvelope();
-            redEnvelopeAddress = address(newRedEnvelope);
-            vm.stopBroadcast();
-            console.log("RedEnvelope deployed at:", redEnvelopeAddress);
+        // Get the addresses from private keys
+        address deployerAddress = vm.addr(deployerPrivateKey);
+        address userAddress = vm.addr(userPrivateKey);
+
+        // For local testing, we can deal some ETH to our addresses
+        // This only works on local testnet (Anvil)
+        vm.deal(deployerAddress, 10 ether);
+        vm.deal(userAddress, 1 ether);
+
+        console.log("Deployer balance:", deployerAddress.balance);
+        console.log("User balance:", userAddress.balance);
+
+        vm.startBroadcast(deployerPrivateKey);
+
+        // Deploy NetworkConfig first
+        NetworkConfig networkConfig = new NetworkConfig();
+        console.log("NetworkConfig deployed at:", address(networkConfig));
+
+        // Deploy RedEnvelope
+        RedEnvelope redEnvelope = new RedEnvelope();
+        console.log("RedEnvelope deployed at:", address(redEnvelope));
+
+        // Create an equal distribution envelope with smaller amount for testing
+        try
+            redEnvelope.createEnvelope{value: 0.5 ether}(
+                5, // number of packets
+                ENVELOP_TYPE_EQUAL,
+                "Test Envelope for Claiming"
+            )
+        {
+            console.log("Created test envelope with ID 0");
+        } catch Error(string memory reason) {
+            console.log("Failed to create envelope:", reason);
+            revert("Envelope creation failed");
         }
 
-        // Tạo một Envelope mới
-        vm.startBroadcast(deployerPrivateKey);
-        RedEnvelope redEnvelope = RedEnvelope(redEnvelopeAddress);
-        uint256 numberOfPackets = 5;
-        uint256 amount = 1 ether;
-        redEnvelope.createEnvelope{value: amount}(
-            numberOfPackets,
-            "equal",
-            "Happy New Year!"
-        );
         vm.stopBroadcast();
-        console.log("Envelope created with ID: 0");
 
-        // Nhận một Packet
-        address recipient = address(0x123); // Địa chỉ ví người nhận
-        uint256 recipientPrivateKey = vm.envUint("RECIPIENT_PRIVATE_KEY"); // Lấy private key của người nhận
-        vm.startBroadcast(recipientPrivateKey);
-        redEnvelope.claimPacket(0, 0); // Envelope ID = 0, Packet ID = 0
-        vm.stopBroadcast();
-        console.log("Packet 0 claimed by recipient:", recipient);
+        // Now switch to user for claiming
+        vm.startBroadcast(userPrivateKey);
 
-        // Rút tiền từ các Packet chưa được nhận
-        vm.startBroadcast(deployerPrivateKey);
-        redEnvelope.withdraw(0); // Envelope ID = 0
+        uint256 envelopeId = 0;
+        uint256 packetId = 0;
+
+        // Get user balance before claiming
+        uint256 userBalanceBefore = userAddress.balance;
+        console.log("\nUser balance before claiming:", userBalanceBefore);
+
+        try redEnvelope.claimPacket(envelopeId, packetId) {
+            console.log("Successfully claimed packet!");
+
+            // Get user balance after claiming
+            uint256 userBalanceAfter = userAddress.balance;
+            console.log("User balance after claiming:", userBalanceAfter);
+            console.log(
+                "Amount received:",
+                userBalanceAfter - userBalanceBefore
+            );
+
+            // Get packet details after claiming
+            (
+                uint256 amount,
+                string memory status,
+                address receiver
+            ) = redEnvelope.packets(packetId);
+            console.log("\nPacket details:");
+            console.log("Amount:", amount);
+            console.log("Status:", status);
+            console.log("Receiver:", receiver);
+        } catch Error(string memory reason) {
+            console.log("Failed to claim packet:", reason);
+        }
+
         vm.stopBroadcast();
-        console.log("Withdrawn unclaimed packets from Envelope 0");
     }
 }

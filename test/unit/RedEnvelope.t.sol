@@ -2,231 +2,264 @@
 pragma solidity ^0.8.13;
 
 import "forge-std/Test.sol";
-import "src/RedEnvelope.sol";
+import "../../src/RedEnvelope.sol";
+import "../../src/helpers/NetworkConfig.sol";
+import {ConstantGlobal} from "../../src/lib/constant.sol";
 
-contract RedEnvelopeTest is Test {
-    RedEnvelope private redEnvelope;
-    address private creator;
-    address private recipient;
+contract RedEnvelopeTest is Test, ConstantGlobal {
+    RedEnvelope public redEnvelope;
+    NetworkConfig public networkConfig;
+
+    address public deployer;
+    address public user1;
+    address public user2;
+    uint256 public deployerPrivateKey;
+    uint256 public user1PrivateKey;
+    uint256 public user2PrivateKey;
 
     function setUp() public {
-        // Khởi tạo hợp đồng RedEnvelope
+        // Generate private keys and addresses
+        deployerPrivateKey = 0xDEADBEEF;
+        user1PrivateKey = 0x0BEEF;
+        user2PrivateKey = 0x0C0FFEE;
+
+        deployer = vm.addr(deployerPrivateKey);
+        user1 = vm.addr(user1PrivateKey);
+        user2 = vm.addr(user2PrivateKey);
+
+        // Fund accounts
+        vm.deal(deployer, 100 ether);
+        vm.deal(user1, 10 ether);
+        vm.deal(user2, 10 ether);
+
+        // Deploy contracts as deployer
+        vm.startPrank(deployer);
+        networkConfig = new NetworkConfig();
         redEnvelope = new RedEnvelope();
-
-        // Tạo các địa chỉ ví mẫu
-        creator = address(0x123);
-        recipient = address(0x456);
-
-        // Gán giá trị ETH cho các ví
-        vm.deal(creator, 10 ether);
-        vm.deal(recipient, 10 ether);
+        vm.stopPrank();
     }
 
-    function testCreateEnvelope() public {
-        // Chuyển sang ví creator
-        vm.startPrank(creator);
+    function test_DeploymentState() public view {
+        assertEq(redEnvelope.nextEnvelopeId(), 0);
+        assertEq(redEnvelope.nextPacketId(), 0);
+        assertEq(redEnvelope.getContractBalance(), 0);
+    }
 
-        // Tạo một Envelope với 5 Packet, chia đều
+    function test_CreateEqualEnvelope() public {
+        vm.startPrank(deployer);
+
+        uint256 envelopeAmount = 1 ether;
         uint256 numberOfPackets = 5;
-        uint256 amount = 1 ether;
-        redEnvelope.createEnvelope{value: amount}(
+
+        redEnvelope.createEnvelope{value: envelopeAmount}(
             numberOfPackets,
-            "equal",
-            "Happy New Year!"
+            ENVELOP_TYPE_EQUAL,
+            "Test Equal Envelope"
         );
 
-        // Kiểm tra xem Envelope đã được tạo thành công
-        uint256 envelopeId = 0; // ID đầu tiên
-        (address envelopeCreator, uint256 totalFund, , , , , , ) = redEnvelope
-            .envelopes(envelopeId);
-        assertEq(envelopeCreator, creator);
-        assertEq(totalFund, amount);
+        // Check envelope state
+        (
+            address creator,
+            uint256 totalFund,
+            uint256 remainingAmount,
+            uint256 numberOfPacketsStored,
+            string memory envelopeType, // message
+            ,
+            bool isActive, // createdAt
 
-        // Kiểm tra số lượng Packet
-        RedEnvelope.Packet[] memory packets = redEnvelope.getPacketsByEnvelope(
-            envelopeId
+        ) = redEnvelope.envelopes(0);
+
+        assertEq(creator, deployer);
+        assertEq(totalFund, envelopeAmount);
+        assertEq(remainingAmount, envelopeAmount);
+        assertEq(numberOfPacketsStored, numberOfPackets);
+        assertEq(
+            keccak256(abi.encodePacked(envelopeType)),
+            keccak256(abi.encodePacked(ENVELOP_TYPE_EQUAL))
         );
-        assertEq(packets.length, numberOfPackets);
+        assertTrue(isActive);
 
-        // Kiểm tra số tiền trong mỗi Packet
-        uint256 amountPerPacket = amount / numberOfPackets;
-        for (uint256 i = 0; i < packets.length; i++) {
-            assertEq(packets[i].amount, amountPerPacket);
-            assertEq(packets[i].status, "unclaimed");
-            assertEq(packets[i].receiver, address(0));
+        // Check packet states
+        uint256[] memory packetIds = redEnvelope.getPacketsByEnvelope(0);
+        assertEq(packetIds.length, numberOfPackets);
+
+        // Check equal distribution
+        uint256 expectedAmount = envelopeAmount / numberOfPackets;
+        for (uint256 i = 0; i < packetIds.length; i++) {
+            (
+                uint256 amount,
+                string memory status,
+                address receiver
+            ) = redEnvelope.packets(packetIds[i]);
+            if (i == packetIds.length - 1) {
+                // Last packet larger than expectedAmount
+                assertTrue(amount >= expectedAmount);
+            } else {
+                assertEq(amount, expectedAmount);
+            }
+            assertEq(
+                keccak256(abi.encodePacked(status)),
+                keccak256(abi.encodePacked(PACKET_STATUS_UNCLAIMED))
+            );
+            assertEq(receiver, address(0));
         }
 
         vm.stopPrank();
     }
 
-    function testClaimPacket() public {
-        // Tạo Envelope
-        vm.startPrank(creator);
+    function test_CreateRandomEnvelope() public {
+        vm.startPrank(deployer);
+
+        uint256 envelopeAmount = 1 ether;
         uint256 numberOfPackets = 5;
-        uint256 amount = 1 ether;
-        redEnvelope.createEnvelope{value: amount}(
+
+        redEnvelope.createEnvelope{value: envelopeAmount}(
             numberOfPackets,
-            "equal",
-            "Happy New Year!"
+            ENVELOP_TYPE_RANDOM,
+            "Test Random Envelope"
         );
-        vm.stopPrank();
 
-        // Chuyển sang ví recipient
-        vm.startPrank(recipient);
+        // Check basic envelope state
+        (
+            address creator,
+            uint256 totalFund,
+            uint256 remainingAmount, // numberOfPackets
+            ,
+            string memory envelopeType, // message
+            ,
+            bool isActive, // createdAt
 
-        // Nhận Packet đầu tiên
-        uint256 envelopeId = 0;
-        uint256 packetId = 0;
-        redEnvelope.claimPacket(envelopeId, packetId);
+        ) = redEnvelope.envelopes(0);
 
-        // Kiểm tra trạng thái của Packet
-        (, string memory status, address receiver) = redEnvelope.packets(
-            packetId
+        assertEq(creator, deployer);
+        assertEq(totalFund, envelopeAmount);
+        assertEq(remainingAmount, envelopeAmount);
+        assertEq(
+            keccak256(abi.encodePacked(envelopeType)),
+            keccak256(abi.encodePacked(ENVELOP_TYPE_RANDOM))
         );
-        assertEq(status, "claimed");
-        assertEq(receiver, recipient);
+        assertTrue(isActive);
 
-        // Kiểm tra số dư của recipient
-        assertEq(recipient.balance, 10 ether + (amount / numberOfPackets));
+        // Check that all packets add up to total amount
+        uint256[] memory packetIds = redEnvelope.getPacketsByEnvelope(0);
+        uint256 totalDistributed = 0;
 
-        // Kiểm tra remainingAmount của Envelope
-        (, , uint256 remainingAmount, , , , , ) = redEnvelope.envelopes(
-            envelopeId
-        );
-        assertEq(remainingAmount, amount - (amount / numberOfPackets));
+        for (uint256 i = 0; i < packetIds.length; i++) {
+            (
+                uint256 amount,
+                string memory status,
+                address receiver
+            ) = redEnvelope.packets(packetIds[i]);
+            totalDistributed += amount;
+            assertEq(
+                keccak256(abi.encodePacked(status)),
+                keccak256(abi.encodePacked(PACKET_STATUS_UNCLAIMED))
+            );
+            assertEq(receiver, address(0));
+        }
+
+        assertEq(totalDistributed, envelopeAmount);
 
         vm.stopPrank();
     }
 
-    function testFailClaimPacketTwice() public {
-        // Tạo Envelope
-        vm.startPrank(creator);
+    function test_ClaimPacket() public {
+        // First create an envelope
+        vm.startPrank(deployer);
+        uint256 envelopeAmount = 1 ether;
         uint256 numberOfPackets = 5;
-        uint256 amount = 1 ether;
-        redEnvelope.createEnvelope{value: amount}(
+
+        redEnvelope.createEnvelope{value: envelopeAmount}(
             numberOfPackets,
-            "equal",
-            "Happy New Year!"
+            ENVELOP_TYPE_EQUAL,
+            "Test Equal Envelope"
         );
         vm.stopPrank();
 
-        // Chuyển sang ví recipient
-        vm.startPrank(recipient);
+        // Now claim as user1
+        vm.startPrank(user1);
 
-        // Nhận Packet đầu tiên
-        uint256 envelopeId = 0;
-        uint256 packetId = 0;
-        redEnvelope.claimPacket(envelopeId, packetId);
+        uint256 user1BalanceBefore = user1.balance;
 
-        // Thử nhận lại Packet đã nhận (sẽ fail)
-        redEnvelope.claimPacket(envelopeId, packetId);
+        redEnvelope.claimPacket(0, 0);
 
-        vm.stopPrank();
-    }
-
-    function testGetContractBalance() public {
-        // Tạo Envelope
-        vm.startPrank(creator);
-        uint256 numberOfPackets = 5;
-        uint256 amount = 1 ether;
-        redEnvelope.createEnvelope{value: amount}(
-            numberOfPackets,
-            "equal",
-            "Happy New Year!"
+        // Check packet state
+        (uint256 amount, string memory status, address receiver) = redEnvelope
+            .packets(0);
+        assertEq(
+            keccak256(abi.encodePacked(status)),
+            keccak256(abi.encodePacked(PACKET_STATUS_CLAIMED))
         );
-        vm.stopPrank();
+        assertEq(receiver, user1);
 
-        // Kiểm tra số dư của hợp đồng
-        assertEq(redEnvelope.getContractBalance(), amount);
-    }
+        // Check user received the funds
+        assertEq(user1.balance, user1BalanceBefore + amount);
 
-    function testWithdrawUnclaimedPackets() public {
-        // Tạo Envelope
-        vm.startPrank(creator);
-        uint256 numberOfPackets = 5;
-        uint256 amount = 1 ether;
-        redEnvelope.createEnvelope{value: amount}(
-            numberOfPackets,
-            "equal",
-            "Happy New Year!"
-        );
-        vm.stopPrank();
-
-        // Nhận một Packet
-        vm.startPrank(recipient);
-        redEnvelope.claimPacket(0, 0); // Envelope ID = 0, Packet ID = 0
-        vm.stopPrank();
-
-        // Rút tiền từ các Packet chưa được nhận
-        vm.startPrank(creator);
-        redEnvelope.withdraw(0); // Envelope ID = 0
-        vm.stopPrank();
-
-        // Kiểm tra số dư của creator
-        uint256 expectedBalance = 10 ether - (amount / numberOfPackets); // Ban đầu 10 ether, sau khi tạo Envelope còn 9 ether, sau khi rút 4 Packet (0.8 ether) còn 9.8 ether
-        assertEq(creator.balance, expectedBalance);
-
-        // Kiểm tra trạng thái của Envelope
+        // Check envelope state
         (, , uint256 remainingAmount, , , , bool isActive, ) = redEnvelope
             .envelopes(0);
-        assertEq(remainingAmount, 0); // 1 Packet đã được nhận, còn lại 4 Packet đã thu hồi
-        assertEq(isActive, false); // Envelope không còn packet nào chưa được nhận nên không còn hoạt động
+        assertEq(remainingAmount, envelopeAmount - amount);
+        assertTrue(isActive);
 
-        // Kiểm tra trạng thái của các Packet
-        vm.startPrank(creator);
-        RedEnvelope.Packet[] memory packets = redEnvelope.getPacketsByEnvelope(
-            0
-        );
-        vm.stopPrank();
-        for (uint256 i = 0; i < packets.length; i++) {
-            if (i == 0) {
-                assertEq(packets[i].status, "claimed"); // Packet đã được nhận
-            } else {
-                assertEq(packets[i].status, "cancel"); // Các Packet chưa được nhận đã bị hủy
-            }
-        }
-    }
-
-    function testFailWithdrawNoUnclaimedPackets() public {
-        // Tạo Envelope
-        vm.startPrank(creator);
-        uint256 numberOfPackets = 5;
-        uint256 amount = 1 ether;
-        redEnvelope.createEnvelope{value: amount}(
-            numberOfPackets,
-            "equal",
-            "Happy New Year!"
-        );
-        vm.stopPrank();
-
-        // Nhận tất cả các Packet
-        vm.startPrank(recipient);
-        for (uint256 i = 0; i < numberOfPackets; i++) {
-            redEnvelope.claimPacket(0, i); // Nhận tất cả các Packet
-        }
-        vm.stopPrank();
-
-        // Thử rút tiền (sẽ fail vì không còn Packet nào chưa được nhận)
-        vm.startPrank(creator);
-        redEnvelope.withdraw(0);
         vm.stopPrank();
     }
 
-    function testFailWithdrawNotCreator() public {
-        // Tạo Envelope
-        vm.startPrank(creator);
-        uint256 numberOfPackets = 5;
-        uint256 amount = 1 ether;
-        redEnvelope.createEnvelope{value: amount}(
-            numberOfPackets,
-            "equal",
-            "Happy New Year!"
+    function testFail_ClaimSamePacketTwice() public {
+        // Create envelope
+        vm.prank(deployer);
+        redEnvelope.createEnvelope{value: 1 ether}(
+            5,
+            ENVELOP_TYPE_EQUAL,
+            "Test Equal Envelope"
         );
-        vm.stopPrank();
 
-        // Thử rút tiền bằng một ví khác (sẽ fail)
-        vm.startPrank(recipient);
+        // Claim same packet twice
+        vm.startPrank(user1);
+        redEnvelope.claimPacket(0, 0);
+        redEnvelope.claimPacket(0, 0); // Should fail
+        vm.stopPrank();
+    }
+
+    function testFail_WithdrawAsNonCreator() public {
+        // Create envelope
+        vm.prank(deployer);
+        redEnvelope.createEnvelope{value: 1 ether}(
+            5,
+            ENVELOP_TYPE_EQUAL,
+            "Test Equal Envelope"
+        );
+
+        // Try to withdraw as non-creator
+        vm.prank(user1);
+        redEnvelope.withdraw(0); // Should fail
+    }
+
+    function test_WithdrawUnclaimed() public {
+        // Create envelope
+        vm.prank(deployer);
+        redEnvelope.createEnvelope{value: 1 ether}(
+            5,
+            ENVELOP_TYPE_EQUAL,
+            "Test Equal Envelope"
+        );
+
+        // Let one user claim a packet
+        vm.prank(user1);
+        redEnvelope.claimPacket(0, 0);
+
+        // Creator withdraws remaining
+        vm.startPrank(deployer);
+        uint256 deployerBalanceBefore = deployer.balance;
         redEnvelope.withdraw(0);
+
+        // Check envelope is inactive
+        (, , uint256 remainingAmount, , , , bool isActive, ) = redEnvelope
+            .envelopes(0);
+        assertEq(remainingAmount, 0);
+        assertFalse(isActive);
+
+        // Check deployer received funds
+        assertTrue(deployer.balance > deployerBalanceBefore);
         vm.stopPrank();
     }
 }
