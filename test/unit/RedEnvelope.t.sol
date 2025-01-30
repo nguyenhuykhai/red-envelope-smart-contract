@@ -48,7 +48,7 @@ contract RedEnvelopeTest is Test, ConstantGlobal {
     function test_CreateEqualEnvelope() public {
         vm.startPrank(deployer);
 
-        uint256 envelopeAmount = 1 ether;
+        uint256 envelopeAmount = 11 ether;
         uint256 numberOfPackets = 5;
 
         redEnvelope.createEnvelope{value: envelopeAmount}(
@@ -110,7 +110,7 @@ contract RedEnvelopeTest is Test, ConstantGlobal {
     function test_CreateRandomEnvelope() public {
         vm.startPrank(deployer);
 
-        uint256 envelopeAmount = 1 ether;
+        uint256 envelopeAmount = 13 ether;
         uint256 numberOfPackets = 5;
 
         redEnvelope.createEnvelope{value: envelopeAmount}(
@@ -166,7 +166,7 @@ contract RedEnvelopeTest is Test, ConstantGlobal {
     function test_ClaimPacket() public {
         // First create an envelope
         vm.startPrank(deployer);
-        uint256 envelopeAmount = 1 ether;
+        uint256 envelopeAmount = 5 ether;
         uint256 numberOfPackets = 5;
 
         redEnvelope.createEnvelope{value: envelopeAmount}(
@@ -237,7 +237,7 @@ contract RedEnvelopeTest is Test, ConstantGlobal {
     function test_WithdrawUnclaimed() public {
         // Create envelope
         vm.prank(deployer);
-        redEnvelope.createEnvelope{value: 1 ether}(
+        redEnvelope.createEnvelope{value: 5 ether}(
             5,
             ENVELOP_TYPE_EQUAL,
             "Test Equal Envelope"

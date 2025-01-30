@@ -85,9 +85,9 @@ contract RedEnvelope is ConstantGlobal, RandomHelper {
         require(_numberOfPackets > 0, "Invalid packet count");
         require(msg.value > 0, "Invalid amount");
 
-        uint256 ethPriceInUSD = networkConfig.getLatestPrice();
+        uint256 ethPriceInUSD = networkConfig.getLatestPriceInWei();
         require(ethPriceInUSD > 0, "Invalid price feed");
-        uint256 minPacketValueInWei = (1 ether * 1e8) / ethPriceInUSD;
+        uint256 minPacketValueInWei = (1 ether * 1e18) / ethPriceInUSD; // Tối thiểu 1 USD mỗi Packet
         bool isEqual = keccak256(abi.encodePacked(_envelopeType)) ==
             keccak256(abi.encodePacked(ENVELOP_TYPE_EQUAL));
         bool isRandom = keccak256(abi.encodePacked(_envelopeType)) ==
