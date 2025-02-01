@@ -35,7 +35,7 @@ verify-kaia-contract:
 	@export $$(cat .env | xargs)
 	@echo "KAIA_URL: ${KAIA_URL}"
 	@echo "KAIA_PRIVATE_KEY: ${KAIA_PRIVATE_KEY}"
-	@forge verify-contract 0x9241e59534c4405CF6dc1C00C4765b8B2Fe7BEB7 src/RedEnvelope.sol:RedEnvelope --chain-id 1001 --verifier sourcify  --verifier-url https://sourcify.dev/server/
+	@forge verify-contract 0xe30606e7de5945f507a80c5245fe74fc2882df5b src/RedEnvelope.sol:RedEnvelope --chain-id 1001 --verifier sourcify  --verifier-url https://sourcify.dev/server/
 
 
 
