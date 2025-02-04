@@ -1,60 +1,105 @@
-## Foundry
+## Website Tạo Lì Xì Trực Tuyến Ứng Dụng Blockchain
 
-**Foundry is a blazing fast, portable and modular toolkit for Ethereum application development written in Rust.**
+### Tổng quan
 
-Foundry consists of:
+Website cho phép người dùng tạo và nhận Lì Xì trực tuyến thông qua các nhiệm vụ, sự kiện đặc biệt, hoặc gửi trực tiếp cho người thân, bạn bè. Ứng dụng sử dụng công nghệ Blockchain để đảm bảo tính minh bạch, bảo mật. Người dùng có thể tham gia vào các sự kiện lì xì hoặc tự tạo phong bao lì xì để gửi cho người khác.
 
--   **Forge**: Ethereum testing framework (like Truffle, Hardhat and DappTools).
--   **Cast**: Swiss army knife for interacting with EVM smart contracts, sending transactions and getting chain data.
--   **Anvil**: Local Ethereum node, akin to Ganache, Hardhat Network.
--   **Chisel**: Fast, utilitarian, and verbose solidity REPL.
+### Tính năng chính
 
-## Documentation
+1. **Thời gian diễn ra sự kiện Lì Xì**
+   - Sự kiện thường được tổ chức vào các dịp lễ lớn như Tết Nguyên Đán, Trung Thu, hoặc các dịp kỷ niệm đặc biệt.
+   - Người tạo lì xì có thể tự thiết lập thời gian diễn ra sự kiện (ngày bắt đầu và kết thúc).
 
-https://book.getfoundry.sh/
+2. **Cách tham gia nhận Lì Xì**
+   - Người nhận lì xì:
+     - Quét mã QR từ phong bao lì xì được tạo bởi chủ lì xì.
+     - Nhấp vào liên kết (link) được chia sẻ trực tiếp.
+   - Người nhận có thể là:
+     - Bất kỳ ai có mã QR hoặc liên kết (tùy chọn mở rộng).
+     - Chỉ định người nhận cụ thể thông qua địa chỉ ví Blockchain (tùy chọn riêng tư).
+   - Tài khoản nhận: Tiền lì xì sẽ được chuyển trực tiếp vào ví Blockchain của người nhận.
 
-## Usage
+3. **Giá trị giải thưởng**
+   - Tổng số lượng bao lì xì và giá trị tiền lì xì do chủ lì xì quy định.
+   - Cách phân phối tiền lì xì:
+     - Chia đều giá trị cho tất cả các bao lì xì.
+     - Phân phối ngẫu nhiên (mỗi bao lì xì có giá trị khác nhau).
+   - Đơn vị tiền tệ: Sử dụng tiền mã hóa (ví dụ: ETH, BNB) hoặc token riêng của nền tảng.
 
-### Build
+4. **Lời chúc và NFT độc đáo**
+   - Lời chúc cá nhân hóa:
+     - Chủ lì xì có thể nhập lời chúc tùy chỉnh để gửi kèm phong bao lì xì.
+
+5. **Cơ chế bảo mật và minh bạch**
+   - Blockchain đảm bảo:
+     - Tính minh bạch: Mọi giao dịch lì xì được ghi lại trên Blockchain, không thể thay đổi.
+     - Bảo mật: Thông tin người dùng và giao dịch được bảo vệ bằng công nghệ mã hóa.
+   - Hợp đồng thông minh (Smart Contract):
+     - Tự động hóa quy trình phân phối tiền lì xì.
+     - Đảm bảo rằng tiền lì xì chỉ được chuyển khi người nhận quét mã QR hoặc mở phong bao.
+
+### Set up môi trường
+
+1. **Cài đặt Foundry**: Theo hướng dẫn tại https://book.getfoundry.sh/ để cài đặt Foundry.
+2. **Clone Repository**: Clone repository này về máy của bạn.
+3. **Cài đặt Dependencies**: Chạy `forge install` để cài đặt các dependencies cần thiết.
+
+### Cách chạy project
+
+#### Build
 
 ```shell
 $ forge build
 ```
 
-### Test
+#### Test
 
 ```shell
 $ forge test
 ```
 
-### Format
+#### Format
 
 ```shell
 $ forge fmt
 ```
 
-### Gas Snapshots
+#### Gas Snapshots
 
 ```shell
 $ forge snapshot
 ```
 
-### Anvil
+#### Anvil
 
 ```shell
 $ anvil
 ```
 
-### Deploy
+### Command deploy contract
+
+- **Deploy to Anvil**:
 
 ```shell
-$ forge script script/Counter.s.sol:CounterScript --rpc-url <your_rpc_url> --private-key <your_private_key>
+$ make deploy-anvil
 ```
 
-### Cast
+- **Deploy to Sepolia**:
 
 ```shell
-$ cast <subcommand>
+$ make deploy-sepolia
+```
+
+- **Deploy to Kairos**:
+
+```shell
+$ make deploy-kaia
+```
+
+### Command test smart contract
+
+```shell
+$ forge test
 ```
 
 ### Help
